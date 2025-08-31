@@ -70,7 +70,7 @@ export class CommandLineParser {
             ssl: false,
             certPath: 'certs/cert.pem',
             keyPath: 'certs/privkey.pem',
-            whitelistMode: true,
+            whitelistMode: false,
             basicAuthMode: false,
             requestProxyEnabled: false,
             requestProxyUrl: '',
