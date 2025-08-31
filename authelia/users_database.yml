@@ -1,0 +1,21 @@
+---
+# Authelia用户数据库
+# 密码使用: docker run authelia/authelia:latest authelia hash-password 'yourpassword'
+
+users:
+  admin:
+    displayname: "管理员"
+    # 密码: admin (请更改!)
+    password: "$argon2id$v=19$m=65536,t=3,p=4$YnlkZWZhdWx0c2FsdDEyMw$rBnDDaXHusB8GKPrOOTl7C1dJoZkAK+CiK3X6RBxJF8"
+    email: admin@chatmask.io
+    groups:
+      - admins
+      - users
+  
+  user:
+    displayname: "普通用户"
+    # 密码: user123 (请更改!)
+    password: "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHRmb3J1c2Vy$RxrP3O9PqCeEj/JFwPHLwPmP2gpH7PUjP6lXjl0W6CA"
+    email: user@chatmask.io
+    groups:
+      - users

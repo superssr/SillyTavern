@@ -1,0 +1,76 @@
+---
+# Authelia配置文件
+# 用于SillyTavern SSO认证
+
+theme: auto
+server:
+  host: 0.0.0.0
+  port: 9091
+
+log:
+  level: info
+
+jwt_secret: ${AUTHELIA_JWT_SECRET}
+
+default_redirection_url: https://st.chatmask.io
+
+totp:
+  issuer: st.chatmask.io
+  period: 30
+  skew: 1
+
+authentication_backend:
+  password_reset:
+    disable: false
+  refresh_interval: 5m
+  file:
+    path: /config/users_database.yml
+    password:
+      algorithm: argon2id
+      iterations: 1
+      salt_length: 16
+      parallelism: 8
+      memory: 64
+
+access_control:
+  default_policy: deny
+  rules:
+    # 允许访问SillyTavern
+    - domain: st.chatmask.io
+      policy: one_factor
+    - domain: "*.chatmask.io"
+      policy: two_factor
+
+session:
+  name: authelia_session
+  secret: ${AUTHELIA_SESSION_SECRET}
+  expiration: 12h
+  inactivity: 30m
+  remember_me_duration: 1M
+  domain: chatmask.io
+  
+  cookies:
+    - name: authelia_session
+      domain: chatmask.io
+      authelia_url: https://auth.chatmask.io
+
+regulation:
+  max_retries: 3
+  find_time: 2m
+  ban_time: 5m
+
+storage:
+  encryption_key: ${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+  local:
+    path: /config/db.sqlite3
+
+notifier:
+  disable_startup_check: true
+  smtp:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    sender: "Authelia <authelia@chatmask.io>"
+    subject: "[Authelia] {title}"
+    startup_check_address: test@chatmask.io
