@@ -281,8 +281,8 @@ export class CommandLineParser {
         const result = {
             configPath: configPath,
             dataRoot: dataRoot,
-            port: cliArguments.port ?? parseInt(process.env.PORT) || getConfigValue('port', defaultConfig.port, 'number'),
-            listen: cliArguments.listen ?? (process.env.LISTEN === 'true') || getConfigValue('listen', defaultConfig.listen, 'boolean'),
+            port: cliArguments.port ?? (parseInt(process.env.PORT) || getConfigValue('port', defaultConfig.port, 'number')),
+            listen: cliArguments.listen ?? ((process.env.LISTEN === 'true') || getConfigValue('listen', defaultConfig.listen, 'boolean')),
             listenAddressIPv6: cliArguments.listenAddressIPv6 ?? getConfigValue('listenAddress.ipv6', defaultConfig.listenAddressIPv6),
             listenAddressIPv4: cliArguments.listenAddressIPv4 ?? getConfigValue('listenAddress.ipv4', defaultConfig.listenAddressIPv4),
             enableIPv4: stringToBool(cliArguments.enableIPv4) ?? stringToBool(getConfigValue('protocol.ipv4', defaultConfig.enableIPv4)) ?? defaultConfig.enableIPv4,
