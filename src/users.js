@@ -755,7 +755,10 @@ async function autheliaUserLogin(request) {
         return false;
     }
 
-    const remoteUser = request.get('Remote-User');
+    // 支持Authelia和Cloudflare Zero Trust
+    const remoteUser = request.get('Remote-User') || 
+                      request.get('CF-Access-Authenticated-User-Email') ||
+                      request.get('CF-Access-User-Email');
     if (!remoteUser) {
         return false;
     }
