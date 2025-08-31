@@ -14,9 +14,6 @@ services:
         value: "10000"
       - key: WHITELIST
         value: "false"
-      # 强制禁用白名单模式
-      - key: WHITELISTMODE
-        value: "false"
       - key: AVOID_LOCAL_MODELS
         value: "true"
       - key: DISABLE_EXTENSIONS
