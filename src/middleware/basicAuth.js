@@ -8,7 +8,7 @@ import { getAllUserHandles, toKey, getPasswordHash } from '../users.js';
 import { getConfigValue, safeReadFileSync } from '../util.js';
 
 const PER_USER_BASIC_AUTH = getConfigValue('perUserBasicAuth', false, 'boolean');
-const ENABLE_ACCOUNTS = getConfigValue('enableUserAccounts', false, 'boolean');
+const ENABLE_ACCOUNTS = globalThis.COMMAND_LINE_ARGS?.enableUserAccounts ?? getConfigValue('enableUserAccounts', false, 'boolean');
 
 const basicAuthMiddleware = async function (request, response, callback) {
     const unauthorizedWebpage = safeReadFileSync('./public/error/unauthorized.html') ?? '';

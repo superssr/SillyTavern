@@ -12,7 +12,7 @@ import { getFileNameValidationFunction } from '../middleware/validateFileName.js
 
 const ENABLE_EXTENSIONS = !!getConfigValue('extensions.enabled', true, 'boolean');
 const ENABLE_EXTENSIONS_AUTO_UPDATE = !!getConfigValue('extensions.autoUpdate', true, 'boolean');
-const ENABLE_ACCOUNTS = !!getConfigValue('enableUserAccounts', false, 'boolean');
+const ENABLE_ACCOUNTS = globalThis.COMMAND_LINE_ARGS?.enableUserAccounts ?? !!getConfigValue('enableUserAccounts', false, 'boolean');
 
 // 10 minutes
 const AUTOSAVE_INTERVAL = 10 * 60 * 1000;
