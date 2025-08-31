@@ -24,7 +24,7 @@ import { serverDirectory } from './server-directory.js';
 export const KEY_PREFIX = 'user:';
 const AVATAR_PREFIX = 'avatar:';
 const ENABLE_ACCOUNTS = globalThis.COMMAND_LINE_ARGS?.enableUserAccounts ?? getConfigValue('enableUserAccounts', false, 'boolean');
-const AUTHELIA_AUTH = getConfigValue('autheliaAuth', false, 'boolean');
+const AUTHELIA_AUTH = globalThis.COMMAND_LINE_ARGS?.autheliaAuth ?? getConfigValue('autheliaAuth', false, 'boolean');
 const PER_USER_BASIC_AUTH = getConfigValue('perUserBasicAuth', false, 'boolean');
 const ANON_CSRF_SECRET = crypto.randomBytes(64).toString('base64');
 
