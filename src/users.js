@@ -514,10 +514,41 @@ export async function initUserStorage(dataRoot) {
     });
 
     const keys = await getAllUserHandles();
+    
+    // 从环境变量创建预设用户
+    await createPresetUsers();
 
     // If there are no users, create the default user
     if (keys.length === 0) {
         await storage.setItem(toKey(DEFAULT_USER.handle), DEFAULT_USER);
+    }
+}
+
+/**
+ * 从环境变量创建预设用户
+ */
+async function createPresetUsers() {
+    // 创建mike用户 (如果环境变量启用)
+    if (process.env.CREATE_USER_MIKE === 'true') {
+        const existingMike = await storage.getItem(toKey('mike'));
+        if (!existingMike) {
+            const salt = crypto.randomBytes(16).toString('hex');
+            const passwordHash = getPasswordHash('mike', salt);
+            
+            const mikeUser = {
+                handle: 'mike',
+                name: 'Mike',
+                created: Date.now(),
+                password: passwordHash,
+                salt: salt,
+                email: 'mike@chatmask.io',
+                admin: true,
+                enabled: true
+            };
+            
+            await storage.setItem(toKey('mike'), mikeUser);
+            console.log('Created user "mike" with password "mike"');
+        }
     }
 }
 
