@@ -275,6 +275,7 @@ export class CommandLineParser {
         console.log('DEBUG: Environment variables:');
         console.log('  PORT =', process.env.PORT);
         console.log('  LISTEN =', process.env.LISTEN);
+        console.log('  WHITELIST =', process.env.WHITELIST);
         console.log('  NODE_ENV =', process.env.NODE_ENV);
 
         /** @type {CommandLineArguments} */
@@ -297,7 +298,7 @@ export class CommandLineParser {
             ssl: cliArguments.ssl ?? getConfigValue('ssl.enabled', defaultConfig.ssl, 'boolean'),
             certPath: cliArguments.certPath ?? getConfigValue('ssl.certPath', defaultConfig.certPath),
             keyPath: cliArguments.keyPath ?? getConfigValue('ssl.keyPath', defaultConfig.keyPath),
-            whitelistMode: cliArguments.whitelist ?? getConfigValue('whitelistMode', defaultConfig.whitelistMode, 'boolean'),
+            whitelistMode: cliArguments.whitelist ?? ((process.env.WHITELIST === 'false') ? false : getConfigValue('whitelistMode', defaultConfig.whitelistMode, 'boolean')),
             basicAuthMode: cliArguments.basicAuthMode ?? getConfigValue('basicAuthMode', defaultConfig.basicAuthMode, 'boolean'),
             requestProxyEnabled: cliArguments.requestProxyEnabled ?? getConfigValue('requestProxy.enabled', defaultConfig.requestProxyEnabled, 'boolean'),
             requestProxyUrl: cliArguments.requestProxyUrl ?? getConfigValue('requestProxy.url', defaultConfig.requestProxyUrl),
@@ -350,6 +351,7 @@ export class CommandLineParser {
         console.log('DEBUG: Final configuration:');
         console.log('  port =', result.port);
         console.log('  listen =', result.listen);
+        console.log('  whitelistMode =', result.whitelistMode);
         console.log('  listenAddressIPv4 =', result.listenAddressIPv4);
         console.log('  enableIPv4 =', result.enableIPv4);
 
