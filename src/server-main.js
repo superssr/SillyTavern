@@ -37,6 +37,7 @@ import {
     verifySecuritySettings,
     loginPageMiddleware,
 } from './users.js';
+import { initDatabaseIntegration } from './database-integration.js';
 
 import getWebpackServeMiddleware from './middleware/webpack-serve.js';
 import basicAuthMiddleware from './middleware/basicAuth.js';
@@ -406,6 +407,7 @@ function setDnsResolutionOrder() {
 
 // User storage module needs to be initialized before starting the server
 initUserStorage(globalThis.DATA_ROOT)
+    .then(initDatabaseIntegration)
     .then(setDnsResolutionOrder)
     .then(ensurePublicDirectoriesExist)
     .then(migrateUserData)

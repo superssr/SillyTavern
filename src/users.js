@@ -18,6 +18,7 @@ import sanitize from 'sanitize-filename';
 import { USER_DIRECTORY_TEMPLATE, DEFAULT_USER, PUBLIC_DIRECTORIES, SETTINGS_FILE, UPLOADS_DIRECTORY } from './constants.js';
 import { getConfigValue, color, delay, generateTimestamp } from './util.js';
 import { readSecret, writeSecret } from './endpoints/secrets.js';
+import { userStorage } from './database-integration.js';
 import { getContentOfType } from './endpoints/content-manager.js';
 import { serverDirectory } from './server-directory.js';
 
@@ -501,6 +502,15 @@ export function toAvatarKey(handle) {
     return `${AVATAR_PREFIX}${handle}`;
 }
 
+// 数据库感知的存储包装函数
+async function getStorageItem(key) {
+    return await userStorage.getItem(key);
+}
+
+async function setStorageItem(key, value) {
+    return await userStorage.setItem(key, value);
+}
+
 /**
  * Initializes the user storage.
  * @param {string} dataRoot The root directory for user data
@@ -520,7 +530,7 @@ export async function initUserStorage(dataRoot) {
 
     // If there are no users, create the default user
     if (keys.length === 0) {
-        await storage.setItem(toKey(DEFAULT_USER.handle), DEFAULT_USER);
+        await setStorageItem(toKey(DEFAULT_USER.handle), DEFAULT_USER);
     }
 }
 
@@ -530,7 +540,7 @@ export async function initUserStorage(dataRoot) {
 async function createPresetUsers() {
     // 创建mike用户 (如果环境变量启用)
     if (process.env.CREATE_USER_MIKE === 'true') {
-        const existingMike = await storage.getItem(toKey('mike'));
+        const existingMike = await getStorageItem(toKey('mike'));
         if (!existingMike) {
             const salt = crypto.randomBytes(16).toString('hex');
             const passwordHash = getPasswordHash('mike', salt);
@@ -546,7 +556,7 @@ async function createPresetUsers() {
                 enabled: true
             };
             
-            await storage.setItem(toKey('mike'), mikeUser);
+            await setStorageItem(toKey('mike'), mikeUser);
             console.log('Created user "mike" with password "mike"');
         }
     }
@@ -688,7 +698,7 @@ export async function getUserAvatar(handle) {
     try {
         // Check if the user has a custom avatar
         const avatarKey = toAvatarKey(handle);
-        const avatar = await storage.getItem(avatarKey);
+        const avatar = await getStorageItem(avatarKey);
 
         if (avatar) {
             return avatar;
@@ -766,7 +776,7 @@ async function singleUserLogin(request) {
 
     const userHandles = await getAllUserHandles();
     if (userHandles.length === 1) {
-        const user = await storage.getItem(toKey(userHandles[0]));
+        const user = await getStorageItem(toKey(userHandles[0]));
         if (user && !user.password) {
             request.session.handle = userHandles[0];
             return true;
@@ -797,7 +807,7 @@ async function autheliaUserLogin(request) {
     const userHandles = await getAllUserHandles();
     for (const userHandle of userHandles) {
         if (remoteUser.toLowerCase() === userHandle) {
-            const user = await storage.getItem(toKey(userHandle));
+            const user = await getStorageItem(toKey(userHandle));
             if (user && user.enabled) {
                 request.session.handle = userHandle;
                 return true;
@@ -836,7 +846,7 @@ async function basicUserLogin(request) {
     const userHandles = await getAllUserHandles();
     for (const userHandle of userHandles) {
         if (username === userHandle) {
-            const user = await storage.getItem(toKey(userHandle));
+            const user = await getStorageItem(toKey(userHandle));
             // Verify pass again here just to be sure
             if (user && user.enabled && user.password && user.password === getPasswordHash(password, user.salt)) {
                 request.session.handle = userHandle;
@@ -880,7 +890,7 @@ export async function setUserDataMiddleware(request, response, next) {
     }
 
     /** @type {User} */
-    const user = await storage.getItem(toKey(handle));
+    const user = await getStorageItem(toKey(handle));
 
     if (!user) {
         console.error('User not found:', handle);

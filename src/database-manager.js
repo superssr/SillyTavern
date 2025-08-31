@@ -18,37 +18,53 @@ class DatabaseManager {
     }
 
     /**
-     * 初始化数据库连接
+     * 初始化数据库连接（强制模式）
      */
     async init() {
-        // 从环境变量或内部URL获取连接字符串
+        // 从环境变量获取连接字符串
         const DATABASE_URL = process.env.DATABASE_URL || process.env.DATABASE_INTERNAL_URL;
         
+        console.log('=== 数据库连接初始化 ===');
+        console.log('DATABASE_URL exists:', !!DATABASE_URL);
+        console.log('DATABASE_URL (masked):', DATABASE_URL ? DATABASE_URL.replace(/:[^:@]*@/, ':***@') : 'NONE');
+        
         if (!DATABASE_URL) {
-            console.log('No database URL found, using file-based storage');
-            return false;
+            console.error('❌ 致命错误：未找到DATABASE_URL环境变量！');
+            console.error('系统配置为纯数据库模式，必须提供DATABASE_URL');
+            process.exit(1);
         }
 
         try {
+            console.log('正在创建数据库连接池...');
             this.pool = new Pool({
                 connectionString: DATABASE_URL,
                 ssl: {
                     rejectUnauthorized: false
-                }
+                },
+                max: 20,
+                idleTimeoutMillis: 30000,
+                connectionTimeoutMillis: 5000
             });
 
             // 测试连接
-            await this.pool.query('SELECT NOW()');
-            console.log('Database connected successfully');
+            console.log('正在测试数据库连接...');
+            const result = await this.pool.query('SELECT NOW() as current_time, version() as pg_version');
+            console.log('✅ 数据库连接成功！');
+            console.log('   当前时间:', result.rows[0].current_time);
+            console.log('   PostgreSQL版本:', result.rows[0].pg_version);
             
             // 初始化表结构
+            console.log('正在初始化数据库表结构...');
             await this.initializeTables();
+            console.log('✅ 数据库表结构初始化完成！');
             
             this.initialized = true;
             return true;
         } catch (error) {
-            console.error('Database connection failed:', error);
-            return false;
+            console.error('❌ 数据库连接失败:', error.message);
+            console.error('完整错误:', error);
+            console.error('系统配置为纯数据库模式，连接失败将退出');
+            process.exit(1);
         }
     }
 
@@ -153,11 +169,27 @@ class DatabaseManager {
             )`
         ];
 
-        for (const query of queries) {
-            await this.pool.query(query);
+        const tableNames = ['users', 'api_keys', 'characters', 'world_books', 'chats', 'settings', 'presets', 'backgrounds'];
+        
+        for (let i = 0; i < queries.length; i++) {
+            const tableName = tableNames[i];
+            console.log(`   创建表: ${tableName}...`);
+            await this.pool.query(queries[i]);
+            console.log(`   ✅ 表 ${tableName} 创建完成`);
         }
         
-        console.log('Database tables initialized');
+        // 验证所有表都已创建
+        const tablesResult = await this.pool.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            ORDER BY table_name
+        `);
+        
+        console.log('   已创建的数据表:');
+        tablesResult.rows.forEach(row => {
+            console.log(`   - ${row.table_name}`);
+        });
     }
 
     // ========== 用户管理 ==========
