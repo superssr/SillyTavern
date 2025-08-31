@@ -55,7 +55,7 @@ export class CommandLineParser {
             configPath: configPath,
             dataRoot: dataPath,
             port: parseInt(process.env.PORT) || 8000,
-            listen: false,
+            listen: process.env.LISTEN === 'true' || false,
             listenAddressIPv6: '[::]',
             listenAddressIPv4: '0.0.0.0',
             enableIPv4: true,
