@@ -29,6 +29,7 @@ import { initConfig } from './config-init.js';
  * @property {string} keyPath Path to private key
  * @property {boolean} whitelistMode If enable whitelist mode
  * @property {boolean} basicAuthMode If enable basic authentication
+ * @property {boolean} enableUserAccounts If enable multi-user accounts
  * @property {boolean} requestProxyEnabled If enable outgoing request proxy
  * @property {string} requestProxyUrl Request proxy URL
  * @property {string[]} requestProxyBypass Request proxy bypass list
@@ -72,6 +73,7 @@ export class CommandLineParser {
             keyPath: 'certs/privkey.pem',
             whitelistMode: false,
             basicAuthMode: false,
+            enableUserAccounts: false,
             requestProxyEnabled: false,
             requestProxyUrl: '',
             requestProxyBypass: [],
@@ -295,6 +297,7 @@ export class CommandLineParser {
             keyPath: cliArguments.keyPath ?? getConfigValue('ssl.keyPath', defaultConfig.keyPath),
             whitelistMode: cliArguments.whitelist ?? ((process.env.WHITELIST === 'false') ? false : getConfigValue('whitelistMode', defaultConfig.whitelistMode, 'boolean')),
             basicAuthMode: cliArguments.basicAuthMode ?? ((process.env.BASIC_AUTH_MODE === 'true') || getConfigValue('basicAuthMode', defaultConfig.basicAuthMode, 'boolean')),
+            enableUserAccounts: cliArguments.enableUserAccounts ?? ((process.env.ENABLE_USER_ACCOUNTS === 'true') || getConfigValue('enableUserAccounts', defaultConfig.enableUserAccounts, 'boolean')),
             requestProxyEnabled: cliArguments.requestProxyEnabled ?? getConfigValue('requestProxy.enabled', defaultConfig.requestProxyEnabled, 'boolean'),
             requestProxyUrl: cliArguments.requestProxyUrl ?? getConfigValue('requestProxy.url', defaultConfig.requestProxyUrl),
             requestProxyBypass: cliArguments.requestProxyBypass ?? getConfigValue('requestProxy.bypass', defaultConfig.requestProxyBypass),
