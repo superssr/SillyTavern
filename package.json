@@ -1,4 +1,7 @@
 {
+    "engines": {
+        "node": ">=18.0.0"
+    },
     "dependencies": {
         "@adobe/css-tools": "^4.4.3",
         "@agnai/sentencepiece-js": "^1.1.1",
