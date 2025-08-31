@@ -9,6 +9,7 @@ import { SETTINGS_FILE } from '../constants.js';
 import { getConfigValue, generateTimestamp, removeOldBackups } from '../util.js';
 import { getAllUserHandles, getUserDirectories } from '../users.js';
 import { getFileNameValidationFunction } from '../middleware/validateFileName.js';
+import { persistenceManager } from '../persistence-manager.js';
 
 const ENABLE_EXTENSIONS = !!getConfigValue('extensions.enabled', true, 'boolean');
 const ENABLE_EXTENSIONS_AUTO_UPDATE = !!getConfigValue('extensions.autoUpdate', true, 'boolean');
@@ -212,11 +213,23 @@ router.post('/save', function (request, response) {
 });
 
 // Wintermute's code
-router.post('/get', (request, response) => {
+router.post('/get', async (request, response) => {
     let settings;
     try {
         const pathToSettings = path.join(request.user.directories.root, SETTINGS_FILE);
-        settings = fs.readFileSync(pathToSettings, 'utf8');
+        let fileSettings = {};
+        
+        // 尝试从文件读取设置
+        try {
+            const settingsContent = fs.readFileSync(pathToSettings, 'utf8');
+            fileSettings = JSON.parse(settingsContent);
+        } catch (e) {
+            // 文件不存在或无效，使用空对象
+        }
+        
+        // 合并文件设置和环境变量设置
+        const mergedSettings = await persistenceManager.mergeSettings(fileSettings);
+        settings = JSON.stringify(mergedSettings, null, 4);
     } catch (e) {
         return response.sendStatus(500);
     }
