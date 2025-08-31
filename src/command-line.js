@@ -271,6 +271,12 @@ export class CommandLineParser {
             fs.mkdirSync(dataRoot, { recursive: true });
         }
 
+        // 调试环境变量
+        console.log('DEBUG: Environment variables:');
+        console.log('  PORT =', process.env.PORT);
+        console.log('  LISTEN =', process.env.LISTEN);
+        console.log('  NODE_ENV =', process.env.NODE_ENV);
+
         /** @type {CommandLineArguments} */
         const result = {
             configPath: configPath,
@@ -339,6 +345,13 @@ export class CommandLineParser {
                 );
             },
         };
+
+        // 调试最终配置
+        console.log('DEBUG: Final configuration:');
+        console.log('  port =', result.port);
+        console.log('  listen =', result.listen);
+        console.log('  listenAddressIPv4 =', result.listenAddressIPv4);
+        console.log('  enableIPv4 =', result.enableIPv4);
 
         if (!this.booleanAutoOptions.includes(result.enableIPv6)) {
             console.warn(color.red('`protocol: ipv6` option invalid'), '\n use:', this.booleanAutoOptions, '\n setting to:', defaultConfig.enableIPv6);
