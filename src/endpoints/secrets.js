@@ -256,7 +256,7 @@ export class SecretManager {
      */
     readSecret(key, id) {
         if (!fs.existsSync(this.filePath)) {
-            return '';
+            return this._readFromEnvironment(key);
         }
 
         const secrets = this._readSecretsFile();
@@ -264,10 +264,40 @@ export class SecretManager {
 
         if (Array.isArray(secretArray) && secretArray.length > 0) {
             const activeSecret = secretArray.find(s => id ? s.id === id : s.active);
-            return activeSecret?.value || '';
+            return activeSecret?.value || this._readFromEnvironment(key);
         }
 
-        return '';
+        return this._readFromEnvironment(key);
+    }
+
+    /**
+     * Reads API key from environment variables as fallback
+     * @private
+     * @param {string} key Secret key
+     * @returns {string} Environment variable value or empty string
+     */
+    _readFromEnvironment(key) {
+        // Map secret keys to common environment variable names
+        const envKeyMap = {
+            [SECRET_KEYS.OPENAI]: 'OPENAI_API_KEY',
+            [SECRET_KEYS.CLAUDE]: 'ANTHROPIC_API_KEY',
+            [SECRET_KEYS.OPENROUTER]: 'OPENROUTER_API_KEY',
+            [SECRET_KEYS.GROQ]: 'GROQ_API_KEY',
+            [SECRET_KEYS.DEEPSEEK]: 'DEEPSEEK_API_KEY',
+            [SECRET_KEYS.MAKERSUITE]: 'GOOGLE_API_KEY',
+            [SECRET_KEYS.TOGETHERAI]: 'TOGETHER_API_KEY',
+            [SECRET_KEYS.MISTRALAI]: 'MISTRAL_API_KEY',
+            [SECRET_KEYS.COHERE]: 'COHERE_API_KEY',
+            [SECRET_KEYS.PERPLEXITY]: 'PERPLEXITY_API_KEY',
+            [SECRET_KEYS.HUGGINGFACE]: 'HUGGINGFACE_API_KEY',
+            [SECRET_KEYS.AI21]: 'AI21_API_KEY',
+            [SECRET_KEYS.MOONSHOT]: 'MOONSHOT_API_KEY',
+            [SECRET_KEYS.XAI]: 'XAI_API_KEY',
+            [SECRET_KEYS.FIREWORKS]: 'FIREWORKS_API_KEY',
+        };
+
+        const envKey = envKeyMap[key];
+        return envKey ? (process.env[envKey] || '') : '';
     }
 
     /**
