@@ -405,9 +405,9 @@ function setDnsResolutionOrder() {
     }
 }
 
-// User storage module needs to be initialized before starting the server
-initUserStorage(globalThis.DATA_ROOT)
-    .then(initDatabaseIntegration)
+// Database integration must be initialized before user storage in pure database mode
+initDatabaseIntegration()
+    .then(() => initUserStorage(globalThis.DATA_ROOT))
     .then(setDnsResolutionOrder)
     .then(ensurePublicDirectoriesExist)
     .then(migrateUserData)
