@@ -272,16 +272,6 @@ export class CommandLineParser {
         }
 
 
-        // Debug: Show all relevant environment variables
-        console.log('🌍 DEBUG Environment Variables:', {
-            'NODE_ENV': process.env.NODE_ENV,
-            'LISTEN': process.env.LISTEN,
-            'PORT': process.env.PORT,
-            'WHITELIST': process.env.WHITELIST,
-            'BASIC_AUTH_MODE': process.env.BASIC_AUTH_MODE,
-            'BASIC_AUTH_USER': process.env.BASIC_AUTH_USER ? '[SET]' : '[NOT SET]',
-            'BASIC_AUTH_PASSWORD': process.env.BASIC_AUTH_PASSWORD ? '[SET]' : '[NOT SET]'
-        });
 
         /** @type {CommandLineArguments} */
         const result = {
@@ -303,30 +293,8 @@ export class CommandLineParser {
             ssl: cliArguments.ssl ?? getConfigValue('ssl.enabled', defaultConfig.ssl, 'boolean'),
             certPath: cliArguments.certPath ?? getConfigValue('ssl.certPath', defaultConfig.certPath),
             keyPath: cliArguments.keyPath ?? getConfigValue('ssl.keyPath', defaultConfig.keyPath),
-            whitelistMode: (() => {
-                const envValue = process.env.WHITELIST;
-                const configValue = getConfigValue('whitelistMode', defaultConfig.whitelistMode, 'boolean');
-                const result = cliArguments.whitelist ?? (envValue === 'false' ? false : configValue);
-                console.log('🐛 DEBUG whitelistMode:', {
-                    'process.env.WHITELIST': envValue,
-                    'configValue': configValue,
-                    'cliArguments.whitelist': cliArguments.whitelist,
-                    'final result': result
-                });
-                return result;
-            })(),
-            basicAuthMode: (() => {
-                const envValue = process.env.BASIC_AUTH_MODE;
-                const configValue = getConfigValue('basicAuthMode', defaultConfig.basicAuthMode, 'boolean');
-                const result = cliArguments.basicAuthMode ?? ((envValue === 'true') || configValue);
-                console.log('🐛 DEBUG basicAuthMode:', {
-                    'process.env.BASIC_AUTH_MODE': envValue,
-                    'configValue': configValue,
-                    'cliArguments.basicAuthMode': cliArguments.basicAuthMode,
-                    'final result': result
-                });
-                return result;
-            })(),
+            whitelistMode: cliArguments.whitelist ?? ((process.env.WHITELIST === 'false') ? false : getConfigValue('whitelistMode', defaultConfig.whitelistMode, 'boolean')),
+            basicAuthMode: cliArguments.basicAuthMode ?? ((process.env.BASIC_AUTH_MODE === 'true') || getConfigValue('basicAuthMode', defaultConfig.basicAuthMode, 'boolean')),
             requestProxyEnabled: cliArguments.requestProxyEnabled ?? getConfigValue('requestProxy.enabled', defaultConfig.requestProxyEnabled, 'boolean'),
             requestProxyUrl: cliArguments.requestProxyUrl ?? getConfigValue('requestProxy.url', defaultConfig.requestProxyUrl),
             requestProxyBypass: cliArguments.requestProxyBypass ?? getConfigValue('requestProxy.bypass', defaultConfig.requestProxyBypass),
