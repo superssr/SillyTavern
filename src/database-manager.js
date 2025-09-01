@@ -41,17 +41,37 @@ class DatabaseManager {
                 ssl: {
                     rejectUnauthorized: false
                 },
-                max: 20,
-                idleTimeoutMillis: 30000,
-                connectionTimeoutMillis: 5000
+                max: 10,
+                idleTimeoutMillis: 60000,
+                connectionTimeoutMillis: 10000,
+                acquireTimeoutMillis: 10000,
+                application_name: 'SillyTavern'
             });
 
-            // 测试连接
+            // 测试连接（带重试机制）
             console.log('正在测试数据库连接...');
-            const result = await this.pool.query('SELECT NOW() as current_time, version() as pg_version');
-            console.log('✅ 数据库连接成功！');
-            console.log('   当前时间:', result.rows[0].current_time);
-            console.log('   PostgreSQL版本:', result.rows[0].pg_version);
+            let lastError;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    console.log(`   尝试第 ${attempt} 次连接...`);
+                    const result = await this.pool.query('SELECT NOW() as current_time, version() as pg_version');
+                    console.log('✅ 数据库连接成功！');
+                    console.log('   当前时间:', result.rows[0].current_time);
+                    console.log('   PostgreSQL版本:', result.rows[0].pg_version);
+                    break;
+                } catch (error) {
+                    lastError = error;
+                    console.log(`   ❌ 第 ${attempt} 次连接失败:`, error.message);
+                    if (attempt < 3) {
+                        console.log(`   等待 ${attempt * 2} 秒后重试...`);
+                        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+                    }
+                }
+            }
+            
+            if (lastError) {
+                throw lastError;
+            }
             
             // 初始化表结构
             console.log('正在初始化数据库表结构...');
