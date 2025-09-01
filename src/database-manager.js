@@ -35,50 +35,110 @@ class DatabaseManager {
         }
 
         try {
-            console.log('正在创建数据库连接池...');
-            this.pool = new Pool({
-                connectionString: DATABASE_URL,
-                ssl: {
-                    rejectUnauthorized: false
+            // 尝试多种SSL配置
+            const sslConfigs = [
+                // 配置1: 标准SSL配置（不验证证书）
+                {
+                    name: 'Standard SSL (rejectUnauthorized: false)',
+                    config: {
+                        connectionString: DATABASE_URL,
+                        ssl: {
+                            rejectUnauthorized: false
+                        },
+                        max: 5,
+                        idleTimeoutMillis: 30000,
+                        connectionTimeoutMillis: 15000,
+                        acquireTimeoutMillis: 15000,
+                        application_name: 'SillyTavern'
+                    }
                 },
-                max: 10,
-                idleTimeoutMillis: 60000,
-                connectionTimeoutMillis: 10000,
-                acquireTimeoutMillis: 10000,
-                application_name: 'SillyTavern'
-            });
-
-            // 测试连接（带重试机制）
-            console.log('正在测试数据库连接...');
-            let lastError;
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    console.log(`   尝试第 ${attempt} 次连接...`);
-                    const result = await this.pool.query('SELECT NOW() as current_time, version() as pg_version');
-                    console.log('✅ 数据库连接成功！');
-                    console.log('   当前时间:', result.rows[0].current_time);
-                    console.log('   PostgreSQL版本:', result.rows[0].pg_version);
-                    break;
-                } catch (error) {
-                    lastError = error;
-                    console.log(`   ❌ 第 ${attempt} 次连接失败:`, error.message);
-                    if (attempt < 3) {
-                        console.log(`   等待 ${attempt * 2} 秒后重试...`);
-                        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+                // 配置2: 要求SSL但不验证证书
+                {
+                    name: 'Require SSL (no cert verification)',
+                    config: {
+                        connectionString: DATABASE_URL,
+                        ssl: true,
+                        max: 5,
+                        idleTimeoutMillis: 30000,
+                        connectionTimeoutMillis: 15000,
+                        acquireTimeoutMillis: 15000,
+                        application_name: 'SillyTavern'
+                    }
+                },
+                // 配置3: 禁用SSL（测试用）
+                {
+                    name: 'No SSL (testing only)',
+                    config: {
+                        connectionString: DATABASE_URL.replace('?sslmode=require', '').replace('sslmode=require', ''),
+                        ssl: false,
+                        max: 5,
+                        idleTimeoutMillis: 30000,
+                        connectionTimeoutMillis: 15000,
+                        acquireTimeoutMillis: 15000,
+                        application_name: 'SillyTavern'
                     }
                 }
+            ];
+
+            let lastError;
+            let connectedConfig = null;
+            
+            for (const { name, config } of sslConfigs) {
+                console.log(`\n正在尝试配置: ${name}`);
+                console.log('正在创建数据库连接池...');
+                
+                // 关闭之前的连接池
+                if (this.pool) {
+                    await this.pool.end().catch(() => {});
+                }
+                
+                this.pool = new Pool(config);
+
+                // 测试连接（每个配置尝试2次）
+                console.log('正在测试数据库连接...');
+                let configSuccess = false;
+                
+                for (let attempt = 1; attempt <= 2; attempt++) {
+                    try {
+                        console.log(`   尝试第 ${attempt} 次连接...`);
+                        const result = await this.pool.query('SELECT NOW() as current_time, version() as pg_version');
+                        console.log('✅ 数据库连接成功！');
+                        console.log(`   使用配置: ${name}`);
+                        console.log('   当前时间:', result.rows[0].current_time);
+                        console.log('   PostgreSQL版本:', result.rows[0].pg_version);
+                        connectedConfig = name;
+                        configSuccess = true;
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                        console.log(`   ❌ 第 ${attempt} 次连接失败:`, error.message);
+                        if (attempt < 2) {
+                            console.log('   等待 2 秒后重试...');
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        }
+                    }
+                }
+                
+                if (configSuccess) {
+                    break;
+                }
+                
+                console.log(`   配置 ${name} 全部尝试失败`);
             }
             
-            if (lastError) {
-                throw lastError;
+            if (!connectedConfig) {
+                console.error(`\n❌ 所有SSL配置都失败了！最后的错误:`, lastError?.message || 'Unknown error');
+                console.error('完整错误信息:', lastError);
+                throw lastError || new Error('所有数据库连接配置都失败');
             }
             
             // 初始化表结构
-            console.log('正在初始化数据库表结构...');
+            console.log(`\n正在使用配置 ${connectedConfig} 初始化数据库表结构...`);
             await this.initializeTables();
             console.log('✅ 数据库表结构初始化完成！');
             
             this.initialized = true;
+            console.log(`✅ 数据库管理器初始化成功！使用配置: ${connectedConfig}`);
             return true;
         } catch (error) {
             console.error('❌ 数据库连接失败:', error.message);
