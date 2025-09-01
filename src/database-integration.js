@@ -22,6 +22,14 @@ export class UserStorageProxy {
             console.log('Database storage enabled - PURE DATABASE MODE');
             // 创建默认用户
             await dbManager.createDefaultUsers();
+            
+            // 设置管理员账号
+            try {
+                const { setupAdminUser } = await import('./admin-setup.js');
+                await setupAdminUser();
+            } catch (error) {
+                console.error('设置管理员账号失败:', error.message);
+            }
         } else {
             console.error('DATABASE CONNECTION FAILED - SYSTEM REQUIRES DATABASE!');
             console.error('Please check DATABASE_URL environment variable');
