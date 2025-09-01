@@ -6,6 +6,7 @@ import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { getIpFromRequest, getRealIpFromHeader } from '../express-common.js';
 import { color, Cache, getConfigValue } from '../util.js';
 import { KEY_PREFIX, getUserAvatar, toKey, getPasswordHash, getPasswordSalt } from '../users.js';
+import { userStorage } from '../database-integration.js';
 
 const DISCREET_LOGIN = getConfigValue('enableDiscreetLogin', false, 'boolean');
 const PREFER_REAL_IP_HEADER = getConfigValue('rateLimiting.preferRealIpHeader', false, 'boolean');
@@ -30,25 +31,39 @@ router.post('/list', async (_request, response) => {
         }
 
         /** @type {import('../users.js').User[]} */
-        const users = await storage.values(x => x.key.startsWith(KEY_PREFIX));
+        // 使用数据库存储获取用户列表
+        const users = await userStorage.getAllUsers();
 
         /** @type {Promise<import('../users.js').UserViewModel>[]} */
         const viewModelPromises = users
-            .filter(x => x.enabled)
+            .filter(x => x.enabled !== false) // 数据库用户默认启用
             .map(user => new Promise(async (resolve) => {
                 getUserAvatar(user.handle).then(avatar =>
                     resolve({
                         handle: user.handle,
                         name: user.name,
-                        created: user.created,
+                        created: user.created_at || user.created,
                         avatar: avatar,
                         password: !!user.password,
                     }),
-                );
+                ).catch(() => {
+                    // 如果获取头像失败，使用默认值
+                    resolve({
+                        handle: user.handle,
+                        name: user.name,
+                        created: user.created_at || user.created,
+                        avatar: null,
+                        password: !!user.password,
+                    });
+                });
             }));
 
         const viewModels = await Promise.all(viewModelPromises);
-        viewModels.sort((x, y) => (x.created ?? 0) - (y.created ?? 0));
+        viewModels.sort((x, y) => {
+            const xTime = new Date(x.created).getTime() || 0;
+            const yTime = new Date(y.created).getTime() || 0;
+            return xTime - yTime;
+        });
         return response.json(viewModels);
     } catch (error) {
         console.error('User list failed:', error);
@@ -67,21 +82,40 @@ router.post('/login', async (request, response) => {
         await loginLimiter.consume(ip);
 
         /** @type {import('../users.js').User} */
-        const user = await storage.getItem(toKey(request.body.handle));
+        // 使用数据库存储获取用户
+        const user = await userStorage.getItem(`user:${request.body.handle}`);
 
         if (!user) {
             console.error('Login failed: User', request.body.handle, 'not found');
             return response.status(403).json({ error: 'Incorrect credentials' });
         }
 
-        if (!user.enabled) {
+        // 数据库用户默认启用，除非明确禁用
+        if (user.enabled === false) {
             console.warn('Login failed: User', user.handle, 'is disabled');
             return response.status(403).json({ error: 'User is disabled' });
         }
 
-        if (user.password && user.password !== getPasswordHash(request.body.password, user.salt)) {
-            console.warn('Login failed: Incorrect password for', user.handle);
-            return response.status(403).json({ error: 'Incorrect credentials' });
+        if (user.password) {
+            // 数据库密码格式：salt:hash
+            // 检查密码是否匹配
+            let isPasswordValid = false;
+            
+            if (user.password.includes(':')) {
+                // 新的数据库格式：salt:hash
+                const [salt, storedHash] = user.password.split(':');
+                const inputHash = getPasswordHash(request.body.password, salt);
+                isPasswordValid = inputHash === user.password;
+            } else if (user.salt) {
+                // 旧的文件格式：password + salt
+                const inputHash = getPasswordHash(request.body.password, user.salt);
+                isPasswordValid = inputHash === user.password;
+            }
+            
+            if (!isPasswordValid) {
+                console.warn('Login failed: Incorrect password for', user.handle);
+                return response.status(403).json({ error: 'Incorrect credentials' });
+            }
         }
 
         if (!request.session) {
