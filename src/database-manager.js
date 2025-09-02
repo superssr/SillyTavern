@@ -23,14 +23,22 @@ class DatabaseManager {
     async init() {
         // 从环境变量获取连接字符串
         const DATABASE_URL = process.env.DATABASE_URL || process.env.DATABASE_INTERNAL_URL;
+        const ALLOW_FILESYSTEM_MODE = process.env.ALLOW_FILESYSTEM_MODE === 'true';
         
         console.log('=== 数据库连接初始化 ===');
         console.log('DATABASE_URL exists:', !!DATABASE_URL);
         console.log('DATABASE_URL (masked):', DATABASE_URL ? DATABASE_URL.replace(/:[^:@]*@/, ':***@') : 'NONE');
+        console.log('ALLOW_FILESYSTEM_MODE:', ALLOW_FILESYSTEM_MODE);
         
         if (!DATABASE_URL) {
+            if (ALLOW_FILESYSTEM_MODE) {
+                console.log('⚠️  数据库未配置，但允许文件系统模式，跳过数据库初始化');
+                this.initialized = false;
+                return false;
+            }
             console.error('❌ 致命错误：未找到DATABASE_URL环境变量！');
             console.error('系统配置为纯数据库模式，必须提供DATABASE_URL');
+            console.error('如需使用文件系统模式，请设置环境变量：ALLOW_FILESYSTEM_MODE=true');
             process.exit(1);
         }
 

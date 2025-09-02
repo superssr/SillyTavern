@@ -7,18 +7,49 @@ import { sync as writeFileAtomicSync } from 'write-file-atomic';
 
 import { humanizedISO8601DateTime } from '../util.js';
 import { getFileNameValidationFunction } from '../middleware/validateFileName.js';
+import { isPureDatabaseMode } from '../database-integration.js';
 
 export const router = express.Router();
 
 router.post('/all', (request, response) => {
     const groups = [];
 
-    if (!fs.existsSync(request.user.directories.groups)) {
-        fs.mkdirSync(request.user.directories.groups);
+    // 在纯数据库模式下返回空组列表
+    if (isPureDatabaseMode) {
+        console.debug('跳过组文件读取（纯数据库模式）');
+        return response.send(groups);
     }
 
-    const files = fs.readdirSync(request.user.directories.groups).filter(x => path.extname(x) === '.json');
-    const chats = fs.readdirSync(request.user.directories.groupChats).filter(x => path.extname(x) === '.jsonl');
+    // 确保组目录存在
+    if (!fs.existsSync(request.user.directories.groups)) {
+        try {
+            fs.mkdirSync(request.user.directories.groups, { recursive: true });
+        } catch (error) {
+            console.error('创建组目录失败:', error);
+            return response.send(groups);
+        }
+    }
+    
+    // 确保组聊天目录存在
+    if (!fs.existsSync(request.user.directories.groupChats)) {
+        try {
+            fs.mkdirSync(request.user.directories.groupChats, { recursive: true });
+        } catch (error) {
+            console.error('创建组聊天目录失败:', error);
+            return response.send(groups);
+        }
+    }
+
+    let files = [];
+    let chats = [];
+    
+    try {
+        files = fs.readdirSync(request.user.directories.groups).filter(x => path.extname(x) === '.json');
+        chats = fs.readdirSync(request.user.directories.groupChats).filter(x => path.extname(x) === '.jsonl');
+    } catch (error) {
+        console.error('读取组文件目录时发生错误:', error);
+        return response.send(groups);
+    }
 
     files.forEach(function (file) {
         try {

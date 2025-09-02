@@ -10,6 +10,7 @@ import { getConfigValue, generateTimestamp, removeOldBackups } from '../util.js'
 import { getAllUserHandles, getUserDirectories } from '../users.js';
 import { getFileNameValidationFunction } from '../middleware/validateFileName.js';
 import { persistenceManager } from '../persistence-manager.js';
+import { isPureDatabaseMode } from '../database-integration.js';
 
 const ENABLE_EXTENSIONS = !!getConfigValue('extensions.enabled', true, 'boolean');
 const ENABLE_EXTENSIONS_AUTO_UPDATE = !!getConfigValue('extensions.autoUpdate', true, 'boolean');
@@ -48,24 +49,41 @@ function triggerAutoSave(handle) {
  * @returns {Array} Parsed files
  */
 function readAndParseFromDirectory(directoryPath, fileExtension = '.json') {
-    const files = fs
-        .readdirSync(directoryPath)
-        .filter(x => path.parse(x).ext == fileExtension)
-        .sort();
+    // 在纯数据库模式下返回空数组
+    if (isPureDatabaseMode) {
+        console.debug(`跳过目录读取（纯数据库模式）: ${directoryPath}`);
+        return [];
+    }
+    
+    // 检查目录是否存在
+    if (!fs.existsSync(directoryPath)) {
+        console.warn(`目录不存在，返回空结果: ${directoryPath}`);
+        return [];
+    }
 
-    const parsedFiles = [];
+    try {
+        const files = fs
+            .readdirSync(directoryPath)
+            .filter(x => path.parse(x).ext == fileExtension)
+            .sort();
 
-    files.forEach(item => {
-        try {
-            const file = fs.readFileSync(path.join(directoryPath, item), 'utf-8');
-            parsedFiles.push(fileExtension == '.json' ? JSON.parse(file) : file);
-        }
-        catch {
-            // skip
-        }
-    });
+        const parsedFiles = [];
 
-    return parsedFiles;
+        files.forEach(item => {
+            try {
+                const file = fs.readFileSync(path.join(directoryPath, item), 'utf-8');
+                parsedFiles.push(fileExtension == '.json' ? JSON.parse(file) : file);
+            }
+            catch {
+                // skip
+            }
+        });
+
+        return parsedFiles;
+    } catch (error) {
+        console.error(`读取目录 ${directoryPath} 时发生错误:`, error);
+        return [];
+    }
 }
 
 /**
@@ -92,6 +110,12 @@ function readPresetsFromDirectory(directoryPath, options = {}) {
         removeFileExtension = false,
         fileExtension = '.json',
     } = options;
+
+    // 在纯数据库模式下返回空结果
+    if (isPureDatabaseMode) {
+        console.debug(`跳过预设目录读取（纯数据库模式）: ${directoryPath}`);
+        return { fileContents: [], fileNames: [] };
+    }
 
     // 检查目录是否存在，如果不存在则返回空结果
     if (!fs.existsSync(directoryPath)) {
@@ -142,6 +166,12 @@ async function backupSettings() {
  * @returns {void}
  */
 function backupUserSettings(handle, preventDuplicates) {
+    // 在纯数据库模式下跳过备份操作
+    if (isPureDatabaseMode) {
+        console.debug(`跳过用户设置备份（纯数据库模式）: ${handle}`);
+        return;
+    }
+    
     const userDirectories = getUserDirectories(handle);
 
     if (!fs.existsSync(userDirectories.root)) {
@@ -198,15 +228,30 @@ function areFilesEqual(file1, file2) {
  * @returns {string|null} Latest backup file. Null if no backup exists.
  */
 function getLatestBackup(handle) {
-    const userDirectories = getUserDirectories(handle);
-    const backupFiles = fs.readdirSync(userDirectories.backups)
-        .filter(x => x.startsWith(getSettingsBackupFilePrefix(handle)))
-        .map(x => ({ name: x, ctime: fs.statSync(path.join(userDirectories.backups, x)).ctimeMs }));
-    const latestBackup = backupFiles.sort((a, b) => b.ctime - a.ctime)[0]?.name;
-    if (!latestBackup) {
+    // 在纯数据库模式下返回null
+    if (isPureDatabaseMode) {
         return null;
     }
-    return path.join(userDirectories.backups, latestBackup);
+    
+    const userDirectories = getUserDirectories(handle);
+    
+    if (!fs.existsSync(userDirectories.backups)) {
+        return null;
+    }
+    
+    try {
+        const backupFiles = fs.readdirSync(userDirectories.backups)
+            .filter(x => x.startsWith(getSettingsBackupFilePrefix(handle)))
+            .map(x => ({ name: x, ctime: fs.statSync(path.join(userDirectories.backups, x)).ctimeMs }));
+        const latestBackup = backupFiles.sort((a, b) => b.ctime - a.ctime)[0]?.name;
+        if (!latestBackup) {
+            return null;
+        }
+        return path.join(userDirectories.backups, latestBackup);
+    } catch (error) {
+        console.error(`获取最新备份时发生错误:`, error);
+        return null;
+    }
 }
 
 export const router = express.Router();
@@ -270,11 +315,26 @@ router.post('/get', async (request, response) => {
             sortFunction: sortByName(request.user.directories.koboldAI_Settings), removeFileExtension: true,
         });
 
-    const worldFiles = fs
-        .readdirSync(request.user.directories.worlds)
-        .filter(file => path.extname(file).toLowerCase() === '.json')
-        .sort((a, b) => a.localeCompare(b));
-    const world_names = worldFiles.map(item => path.parse(item).name);
+    // 处理世界文件列表（纯数据库模式下返回空数组）
+    let world_names = [];
+    if (!isPureDatabaseMode) {
+        try {
+            if (fs.existsSync(request.user.directories.worlds)) {
+                const worldFiles = fs
+                    .readdirSync(request.user.directories.worlds)
+                    .filter(file => path.extname(file).toLowerCase() === '.json')
+                    .sort((a, b) => a.localeCompare(b));
+                world_names = worldFiles.map(item => path.parse(item).name);
+            } else {
+                console.warn(`世界文件目录不存在: ${request.user.directories.worlds}`);
+            }
+        } catch (error) {
+            console.error(`读取世界文件时发生错误:`, error);
+            world_names = [];
+        }
+    } else {
+        console.debug('跳过世界文件读取（纯数据库模式）');
+    }
 
     const themes = readAndParseFromDirectory(request.user.directories.themes);
     const movingUIPresets = readAndParseFromDirectory(request.user.directories.movingUI);
@@ -311,6 +371,17 @@ router.post('/get', async (request, response) => {
 
 router.post('/get-snapshots', async (request, response) => {
     try {
+        // 在纯数据库模式下返回空列表
+        if (isPureDatabaseMode) {
+            console.debug('跳过快照读取（纯数据库模式）');
+            return response.json([]);
+        }
+        
+        if (!fs.existsSync(request.user.directories.backups)) {
+            console.warn(`备份目录不存在: ${request.user.directories.backups}`);
+            return response.json([]);
+        }
+        
         const snapshots = fs.readdirSync(request.user.directories.backups);
         const userFilesPattern = getSettingsBackupFilePrefix(request.user.profile.handle);
         const userSnapshots = snapshots.filter(x => x.startsWith(userFilesPattern));

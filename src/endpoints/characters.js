@@ -24,6 +24,7 @@ import { getUserDirectories } from '../users.js';
 import { getChatInfo } from './chats.js';
 import { ByafParser } from '../byaf.js';
 import cacheBuster from '../middleware/cacheBuster.js';
+import { isPureDatabaseMode } from '../database-integration.js';
 
 // With 100 MB limit it would take roughly 3000 characters to reach this limit
 const memoryCacheCapacity = getConfigValue('performance.memoryCacheCapacity', '100mb');
@@ -1207,6 +1208,18 @@ router.post('/delete', validateAvatarUrlMiddleware, async function (request, res
  */
 router.post('/all', async function (request, response) {
     try {
+        // 在纯数据库模式下返回空角色列表
+        if (isPureDatabaseMode) {
+            console.debug('跳过角色文件读取（纯数据库模式）');
+            return response.send([]);
+        }
+        
+        // 检查角色目录是否存在
+        if (!fs.existsSync(request.user.directories.characters)) {
+            console.warn(`角色目录不存在: ${request.user.directories.characters}`);
+            return response.send([]);
+        }
+        
         const files = fs.readdirSync(request.user.directories.characters);
         const pngFiles = files.filter(file => file.endsWith('.png'));
         const processingPromises = pngFiles.map(file => processCharacter(file, request.user.directories, { shallow: useShallowCharacters }));

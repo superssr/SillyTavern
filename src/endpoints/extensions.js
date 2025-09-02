@@ -6,6 +6,7 @@ import sanitize from 'sanitize-filename';
 import { CheckRepoActions, default as simpleGit } from 'simple-git';
 
 import { PUBLIC_DIRECTORIES } from '../constants.js';
+import { isPureDatabaseMode } from '../database-integration.js';
 
 /**
  * This function extracts the extension information from the manifest file.
@@ -428,10 +429,23 @@ router.get('/discover', function (request, response) {
         .map(f => ({ type: 'system', name: f }));
 
     // Get all folders in local extensions folder
-    const userExtensions = fs
-        .readdirSync(path.join(request.user.directories.extensions))
-        .filter(f => fs.statSync(path.join(request.user.directories.extensions, f)).isDirectory())
-        .map(f => ({ type: 'local', name: `third-party/${f}` }));
+    let userExtensions = [];
+    if (!isPureDatabaseMode) {
+        try {
+            if (fs.existsSync(request.user.directories.extensions)) {
+                userExtensions = fs
+                    .readdirSync(path.join(request.user.directories.extensions))
+                    .filter(f => fs.statSync(path.join(request.user.directories.extensions, f)).isDirectory())
+                    .map(f => ({ type: 'local', name: `third-party/${f}` }));
+            } else {
+                console.warn(`用户扩展目录不存在: ${request.user.directories.extensions}`);
+            }
+        } catch (error) {
+            console.error('读取用户扩展目录时发生错误:', error);
+        }
+    } else {
+        console.debug('跳过用户扩展读取（纯数据库模式）');
+    }
 
     // Get all folders in global extensions folder
     // In case of a conflict, the extension will be loaded from the user folder

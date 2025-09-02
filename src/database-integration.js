@@ -31,43 +31,59 @@ export class UserStorageProxy {
                 console.error('设置管理员账号失败:', error.message);
             }
         } else {
-            console.error('DATABASE CONNECTION FAILED - SYSTEM REQUIRES DATABASE!');
-            console.error('Please check DATABASE_URL environment variable');
-            process.exit(1);  // 强制退出，不允许文件存储
+            const ALLOW_FILESYSTEM_MODE = process.env.ALLOW_FILESYSTEM_MODE === 'true';
+            if (ALLOW_FILESYSTEM_MODE) {
+                console.log('数据库未启用，使用文件系统模式');
+            } else {
+                console.error('DATABASE CONNECTION FAILED - SYSTEM REQUIRES DATABASE!');
+                console.error('Please check DATABASE_URL environment variable');
+                console.error('如需使用文件系统模式，请设置环境变量：ALLOW_FILESYSTEM_MODE=true');
+                process.exit(1);  // 强制退出，不允许文件存储
+            }
         }
     }
 
     /**
-     * 设置项目（仅使用数据库存储）
+     * 设置项目（数据库模式或文件系统模式）
      */
     async setItem(key, value) {        
-        // 仅保存到数据库
-        if (key.startsWith('user:')) {
-            const handle = key.replace('user:', '');
-            const success = await dbManager.upsertUser({ ...value, handle });
-            if (!success) {
-                throw new Error(`Failed to save user data to database: ${handle}`);
+        if (this.dbEnabled) {
+            // 仅保存到数据库
+            if (key.startsWith('user:')) {
+                const handle = key.replace('user:', '');
+                const success = await dbManager.upsertUser({ ...value, handle });
+                if (!success) {
+                    throw new Error(`Failed to save user data to database: ${handle}`);
+                }
             }
+        } else {
+            // 文件系统模式，使用 node-persist
+            await storage.setItem(key, value);
         }
         
         return value;
     }
 
     /**
-     * 获取项目（仅从数据库获取）
+     * 获取项目（数据库模式或文件系统模式）
      */
     async getItem(key) {
-        // 仅从数据库获取用户数据
-        if (key.startsWith('user:')) {
-            const handle = key.replace('user:', '');
-            const dbUser = await dbManager.getUser(handle);
-            if (!dbUser) {
-                throw new Error(`User not found in database: ${handle}`);
+        if (this.dbEnabled) {
+            // 仅从数据库获取用户数据
+            if (key.startsWith('user:')) {
+                const handle = key.replace('user:', '');
+                const dbUser = await dbManager.getUser(handle);
+                if (!dbUser) {
+                    throw new Error(`User not found in database: ${handle}`);
+                }
+                return dbUser;
             }
-            return dbUser;
+            
+            throw new Error(`Non-user data access not supported in pure database mode: ${key}`);
+        } else {
+            // 文件系统模式，使用 node-persist
+            return await storage.getItem(key);
         }
-        
-        throw new Error(`Non-user data access not supported in pure database mode: ${key}`);
     }
 
     /**
