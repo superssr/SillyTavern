@@ -4,6 +4,7 @@ import path from 'node:path';
 import express from 'express';
 import { sync as writeFileAtomicSync } from 'write-file-atomic';
 import { color, getConfigValue, uuidv4 } from '../util.js';
+import { isPureDatabaseMode } from '../database-integration.js';
 
 export const SECRETS_FILE = 'secrets.json';
 export const SECRET_KEYS = {
@@ -114,6 +115,10 @@ export class SecretManager {
      * @private
      */
     _ensureSecretsFile() {
+        // 在纯数据库模式下跳过文件操作
+        if (isPureDatabaseMode) {
+            return;
+        }
         if (!fs.existsSync(this.filePath)) {
             writeFileAtomicSync(this.filePath, JSON.stringify(this.defaultSecrets), 'utf-8');
         }
@@ -125,6 +130,10 @@ export class SecretManager {
      * @returns {SecretKeys}
      */
     _readSecretsFile() {
+        // 在纯数据库模式下返回空对象
+        if (isPureDatabaseMode) {
+            return /** @type {SecretKeys} */ (this.defaultSecrets);
+        }
         this._ensureSecretsFile();
         const fileContents = fs.readFileSync(this.filePath, 'utf-8');
         return /** @type {SecretKeys} */ (JSON.parse(fileContents));
@@ -136,6 +145,10 @@ export class SecretManager {
      * @param {SecretKeys} secrets
      */
     _writeSecretsFile(secrets) {
+        // 在纯数据库模式下跳过文件操作
+        if (isPureDatabaseMode) {
+            return;
+        }
         writeFileAtomicSync(this.filePath, JSON.stringify(secrets, null, 4), 'utf-8');
     }
 
@@ -217,7 +230,8 @@ export class SecretManager {
      * @param {string?} id Secret ID to delete
      */
     deleteSecret(key, id) {
-        if (!fs.existsSync(this.filePath)) {
+        // 在纯数据库模式下跳过文件操作
+        if (isPureDatabaseMode || !fs.existsSync(this.filePath)) {
             return;
         }
 
@@ -255,7 +269,8 @@ export class SecretManager {
      * @returns {string} Secret value or empty string if not found
      */
     readSecret(key, id) {
-        if (!fs.existsSync(this.filePath)) {
+        // 在纯数据库模式下从环境变量读取
+        if (isPureDatabaseMode || !fs.existsSync(this.filePath)) {
             return this._readFromEnvironment(key);
         }
 
@@ -306,7 +321,8 @@ export class SecretManager {
      * @param {string} id ID of the secret to activate
      */
     rotateSecret(key, id) {
-        if (!fs.existsSync(this.filePath)) {
+        // 在纯数据库模式下跳过文件操作
+        if (isPureDatabaseMode || !fs.existsSync(this.filePath)) {
             return;
         }
 
@@ -398,7 +414,8 @@ export class SecretManager {
      * Migrates legacy flat secrets format to new format
      */
     migrateFlatSecrets() {
-        if (!fs.existsSync(this.filePath)) {
+        // 在纯数据库模式下跳过文件操作
+        if (isPureDatabaseMode || !fs.existsSync(this.filePath)) {
             return;
         }
 

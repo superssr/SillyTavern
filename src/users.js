@@ -18,7 +18,7 @@ import sanitize from 'sanitize-filename';
 import { USER_DIRECTORY_TEMPLATE, DEFAULT_USER, PUBLIC_DIRECTORIES, SETTINGS_FILE, UPLOADS_DIRECTORY } from './constants.js';
 import { getConfigValue, color, delay, generateTimestamp } from './util.js';
 import { readSecret, writeSecret } from './endpoints/secrets.js';
-import { userStorage } from './database-integration.js';
+import { userStorage, isPureDatabaseMode } from './database-integration.js';
 import { getContentOfType } from './endpoints/content-manager.js';
 import { serverDirectory } from './server-directory.js';
 
@@ -107,6 +107,12 @@ const STORAGE_KEYS = {
  * @returns {Promise<import('./users.js').UserDirectoryList[]>} - The list of user directories
  */
 export async function ensurePublicDirectoriesExist() {
+    // 在纯数据库模式下跳过目录创建
+    if (isPureDatabaseMode) {
+        console.log('跳过目录创建：运行在纯数据库模式');
+        return [];
+    }
+    
     for (const dir of Object.values(PUBLIC_DIRECTORIES)) {
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
@@ -217,6 +223,11 @@ export function cleanUploads() {
  * @returns {Promise<import('./users.js').UserDirectoryList[]>} - The list of user directories
  */
 export async function getUserDirectoriesList() {
+    // 在纯数据库模式下返回空列表
+    if (isPureDatabaseMode) {
+        return [];
+    }
+    
     const userHandles = await getAllUserHandles();
     const directoriesList = userHandles.map(handle => getUserDirectories(handle));
     return directoriesList;
@@ -226,6 +237,12 @@ export async function getUserDirectoriesList() {
  * Perform migration from the old user data format to the new one.
  */
 export async function migrateUserData() {
+    // 在纯数据库模式下完全跳过用户数据迁移
+    if (isPureDatabaseMode) {
+        console.log('跳过用户数据迁移：运行在纯数据库模式');
+        return;
+    }
+    
     const publicDirectory = path.join(process.cwd(), 'public');
 
     // No need to migrate if the characters directory doesn't exists
@@ -428,6 +445,12 @@ export async function migrateUserData() {
 }
 
 export async function migrateSystemPrompts() {
+    // 在纯数据库模式下完全跳过系统提示迁移
+    if (isPureDatabaseMode) {
+        console.log('跳过系统提示迁移：运行在纯数据库模式');
+        return;
+    }
+
     /**
      * Gets the default system prompts.
      * @returns {Promise<any[]>} - The list of default system prompts
@@ -450,6 +473,11 @@ export async function migrateSystemPrompts() {
             const backupsPath = path.join(directory.backups, '_sysprompt');
             fs.mkdirSync(backupsPath, { recursive: true });
             const defaultPrompts = await getDefaultSystemPrompts();
+            // 在纯数据库模式下跳过文件系统操作
+            if (!fs.existsSync(directory.instruct)) {
+                console.log('跳过系统提示迁移：目录不存在（纯数据库模式）');
+                continue;
+            }
             const instucts = fs.readdirSync(directory.instruct);
             let migratedPrompts = [];
             for (const instruct of instucts) {

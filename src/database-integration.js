@@ -200,7 +200,11 @@ export class SettingsStorageProxy {
 // 创建全局存储代理实例
 export const userStorage = new UserStorageProxy();
 
+// 全局标志，指示是否运行在纯数据库模式下
+export let isPureDatabaseMode = false;
+
 // 初始化函数
 export async function initDatabaseIntegration() {
     await userStorage.init();
+    isPureDatabaseMode = userStorage.dbEnabled;
 }
