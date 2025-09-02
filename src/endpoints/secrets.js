@@ -543,7 +543,7 @@ export function migrateFlatSecrets(directoriesList) {
 
 export const router = express.Router();
 
-router.post('/write', (request, response) => {
+router.post('/write', async (request, response) => {
     try {
         const { key, value, label } = request.body;
 
@@ -551,23 +551,60 @@ router.post('/write', (request, response) => {
             return response.status(400).send('Invalid key or value');
         }
 
-        const manager = new SecretManager(request.user.directories);
-        const id = manager.writeSecret(key, value, label);
-
-        return response.send({ id });
+        // 在纯数据库模式下，使用数据库存储API密钥
+        if (isPureDatabaseMode) {
+            const { dbManager } = await import('../database-manager.js');
+            const success = await dbManager.saveApiKey(request.user.profile.handle, key, value);
+            
+            if (!success) {
+                throw new Error('Failed to save API key to database');
+            }
+            
+            console.log(`API密钥已保存到数据库：用户 ${request.user.profile.handle}, 服务 ${key}`);
+            return response.send({ id: 'database-stored', result: 'ok' });
+        } else {
+            // 文件系统模式
+            const manager = new SecretManager(request.user.directories);
+            const id = manager.writeSecret(key, value, label);
+            return response.send({ id });
+        }
     } catch (error) {
-        console.error('Error writing secret:', error);
-        return response.sendStatus(500);
+        console.error('保存API密钥失败:', error);
+        return response.status(500).send({ error: error.message });
     }
 });
 
-router.post('/read', (request, response) => {
+router.post('/read', async (request, response) => {
     try {
-        const manager = new SecretManager(request.user.directories);
-        const state = manager.getSecretState();
-        return response.send(state);
+        // 在纯数据库模式下，从数据库读取API密钥状态
+        if (isPureDatabaseMode) {
+            const { dbManager } = await import('../database-manager.js');
+            const apiKeys = await dbManager.getAllApiKeys(request.user.profile.handle);
+            
+            // 将数据库格式转换为前端期望的格式
+            const state = {};
+            for (const [service, key] of Object.entries(apiKeys)) {
+                if (key) {
+                    state[service] = [{
+                        id: 'database-stored',
+                        value: '*'.repeat(10) + key.slice(-4), // 掩码显示
+                        label: service,
+                        active: true
+                    }];
+                } else {
+                    state[service] = null;
+                }
+            }
+            
+            return response.send(state);
+        } else {
+            // 文件系统模式
+            const manager = new SecretManager(request.user.directories);
+            const state = manager.getSecretState();
+            return response.send(state);
+        }
     } catch (error) {
-        console.error('Error reading secret state:', error);
+        console.error('读取API密钥状态失败:', error);
         return response.send({});
     }
 });

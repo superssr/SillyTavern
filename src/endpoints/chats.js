@@ -9,6 +9,8 @@ import { sync as writeFileAtomicSync } from 'write-file-atomic';
 import _ from 'lodash';
 
 import validateAvatarUrlMiddleware from '../middleware/validateFileName.js';
+import { isPureDatabaseMode } from '../database-integration.js';
+import { dbManager } from '../database-manager.js';
 import {
     getConfigValue,
     humanizedISO8601DateTime,
@@ -432,6 +434,27 @@ router.post('/save', validateAvatarUrlMiddleware, async function (request, respo
         const chatData = request.body.chat;
         const jsonlData = chatData.map(JSON.stringify).join('\n');
         const fileName = `${String(request.body.file_name)}.jsonl`;
+        
+        // 在纯数据库模式下保存到数据库
+        if (isPureDatabaseMode) {
+            console.debug(`保存聊天记录到数据库: ${fileName}（纯数据库模式）`);
+            
+            const success = await dbManager.saveChat(
+                request.user.profile.handle,
+                directoryName, // 角色名
+                fileName,
+                chatData
+            );
+            
+            if (!success) {
+                console.error('保存聊天记录到数据库失败');
+                return response.status(500).send({ error: '保存聊天记录失败' });
+            }
+            
+            return response.send({ result: 'ok' });
+        }
+        
+        // 文件系统模式的原始逻辑
         const filePath = path.join(request.user.directories.chats, directoryName, sanitize(fileName));
         if (checkIntegrity && !request.body.force) {
             const integritySlug = chatData?.[0]?.chat_metadata?.integrity;
@@ -450,9 +473,30 @@ router.post('/save', validateAvatarUrlMiddleware, async function (request, respo
     }
 });
 
-router.post('/get', validateAvatarUrlMiddleware, function (request, response) {
+router.post('/get', validateAvatarUrlMiddleware, async function (request, response) {
     try {
         const dirName = String(request.body.avatar_url).replace('.png', '');
+        
+        if (!request.body.file_name) {
+            return response.send({});
+        }
+
+        const fileName = `${String(request.body.file_name)}.jsonl`;
+        
+        // 在纯数据库模式下从数据库获取聊天记录
+        if (isPureDatabaseMode) {
+            console.debug(`从数据库获取聊天记录: ${fileName}（纯数据库模式）`);
+            
+            const chatData = await dbManager.getChat(
+                request.user.profile.handle,
+                dirName, // 角色名
+                fileName
+            );
+            
+            return response.send(chatData || []);
+        }
+        
+        // 文件系统模式的原始逻辑
         const directoryPath = path.join(request.user.directories.chats, dirName);
         const chatDirExists = fs.existsSync(directoryPath);
 
@@ -462,11 +506,6 @@ router.post('/get', validateAvatarUrlMiddleware, function (request, response) {
             return response.send({});
         }
 
-        if (!request.body.file_name) {
-            return response.send({});
-        }
-
-        const fileName = `${String(request.body.file_name)}.jsonl`;
         const filePath = path.join(directoryPath, sanitize(fileName));
         const chatFileExists = fs.existsSync(filePath);
 

@@ -97,18 +97,21 @@ router.post('/login', async (request, response) => {
         }
 
         if (user.password) {
-            // 数据库密码格式：salt:hash
-            // 检查密码是否匹配
+            // 检查密码是否匹配（支持多种密码格式）
             let isPasswordValid = false;
             
             if (user.password.includes(':')) {
-                // 新的数据库格式：salt:hash
+                // 数据库格式：salt:hash
                 const [salt, storedHash] = user.password.split(':');
                 const inputHash = getPasswordHash(request.body.password, salt);
-                isPasswordValid = inputHash === user.password;
+                isPasswordValid = `${salt}:${inputHash}` === user.password;
             } else if (user.salt) {
-                // 旧的文件格式：password + salt
+                // 文件系统格式：password + salt
                 const inputHash = getPasswordHash(request.body.password, user.salt);
+                isPasswordValid = inputHash === user.password;
+            } else {
+                // 简单哈希格式（不推荐，但兼容）
+                const inputHash = getPasswordHash(request.body.password, '');
                 isPasswordValid = inputHash === user.password;
             }
             

@@ -24,7 +24,7 @@ import { getUserDirectories } from '../users.js';
 import { getChatInfo } from './chats.js';
 import { ByafParser } from '../byaf.js';
 import cacheBuster from '../middleware/cacheBuster.js';
-import { isPureDatabaseMode } from '../database-integration.js';
+import { isPureDatabaseMode, CharacterStorageProxy } from '../database-integration.js';
 
 // With 100 MB limit it would take roughly 3000 characters to reach this limit
 const memoryCacheCapacity = getConfigValue('performance.memoryCacheCapacity', '100mb');
@@ -958,9 +958,42 @@ router.post('/create', getFileNameValidationFunction('file_name'), async functio
 
         request.body.ch_name = sanitize(request.body.ch_name);
 
-        const char = JSON.stringify(charaFormatData(request.body, request.user.directories));
+        const characterData = charaFormatData(request.body, request.user.directories);
         const internalName = request.body.file_name || getPngName(request.body.ch_name, request.user.directories);
         const avatarName = `${internalName}.png`;
+        
+        // 在纯数据库模式下保存到数据库
+        if (isPureDatabaseMode) {
+            console.debug(`保存角色到数据库: ${avatarName}（纯数据库模式）`);
+            const characterStorage = new CharacterStorageProxy(request.user.profile.handle);
+            
+            // 处理头像数据
+            let avatarData = null;
+            if (request.file) {
+                const crop = tryParse(request.query.crop);
+                const uploadPath = path.join(request.file.destination, request.file.filename);
+                avatarData = await parseImageBuffer(fs.readFileSync(uploadPath), crop);
+                fs.unlinkSync(uploadPath);
+            } else {
+                // 使用默认头像
+                avatarData = await fs.promises.readFile(DEFAULT_AVATAR_PATH);
+            }
+            
+            // 准备角色数据
+            const character = {
+                filename: avatarName,
+                data: characterData,
+                avatar: avatarData.toString('base64'),
+                created_at: new Date(),
+                updated_at: new Date()
+            };
+            
+            await characterStorage.save(character);
+            return response.send(avatarName);
+        }
+        
+        // 文件系统模式的原始逻辑
+        const char = JSON.stringify(characterData);
         const chatsPath = path.join(request.user.directories.chats, internalName);
 
         if (!fs.existsSync(chatsPath)) fs.mkdirSync(chatsPath);
@@ -1208,10 +1241,12 @@ router.post('/delete', validateAvatarUrlMiddleware, async function (request, res
  */
 router.post('/all', async function (request, response) {
     try {
-        // 在纯数据库模式下返回空角色列表
+        // 在纯数据库模式下从数据库获取角色列表
         if (isPureDatabaseMode) {
-            console.debug('跳过角色文件读取（纯数据库模式）');
-            return response.send([]);
+            console.debug('从数据库获取角色列表（纯数据库模式）');
+            const characterStorage = new CharacterStorageProxy(request.user.profile.handle);
+            const characters = await characterStorage.getAll();
+            return response.send(characters);
         }
         
         // 检查角色目录是否存在
@@ -1236,6 +1271,18 @@ router.post('/get', validateAvatarUrlMiddleware, async function (request, respon
     try {
         if (!request.body) return response.sendStatus(400);
         const item = request.body.avatar_url;
+        
+        // 在纯数据库模式下从数据库获取角色
+        if (isPureDatabaseMode) {
+            console.debug(`从数据库获取角色: ${item}（纯数据库模式）`);
+            const characterStorage = new CharacterStorageProxy(request.user.profile.handle);
+            const character = await characterStorage.get(item);
+            if (!character) {
+                return response.sendStatus(404);
+            }
+            return response.send(character);
+        }
+        
         const filePath = path.join(request.user.directories.characters, item);
 
         if (!fs.existsSync(filePath)) {

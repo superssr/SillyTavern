@@ -78,6 +78,32 @@ class PersistenceManager {
     }
 
     /**
+     * 保存设置到数据库
+     */
+    async saveSettings(userHandle, settings) {
+        try {
+            const { dbManager } = await import('./database-manager.js');
+            return await dbManager.saveSettings(userHandle, settings);
+        } catch (error) {
+            console.error('保存设置到数据库失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 从数据库获取设置
+     */
+    async getSettings(userHandle) {
+        try {
+            const { dbManager } = await import('./database-manager.js');
+            return await dbManager.getSettings(userHandle);
+        } catch (error) {
+            console.error('从数据库获取设置失败:', error);
+            return null;
+        }
+    }
+
+    /**
      * 检查是否需要数据迁移
      */
     needsMigration() {

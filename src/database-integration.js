@@ -74,12 +74,14 @@ export class UserStorageProxy {
                 const handle = key.replace('user:', '');
                 const dbUser = await dbManager.getUser(handle);
                 if (!dbUser) {
-                    throw new Error(`User not found in database: ${handle}`);
+                    return null; // 返回 null 而不是抛出错误
                 }
                 return dbUser;
             }
             
-            throw new Error(`Non-user data access not supported in pure database mode: ${key}`);
+            // 对于非用户数据，在纯数据库模式下返回 null 或默认值
+            console.debug(`纯数据库模式：跳过非用户数据访问: ${key}`);
+            return null;
         } else {
             // 文件系统模式，使用 node-persist
             return await storage.getItem(key);

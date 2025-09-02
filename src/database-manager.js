@@ -434,24 +434,34 @@ class DatabaseManager {
                 updated_at = CURRENT_TIMESTAMP
         `;
 
+        // 提取角色数据字段（支持新的数据结构）
+        const characterData = character.data || character;
+        const name = characterData.name || characterData.data?.name || '';
+        const description = characterData.description || characterData.data?.description || '';
+        const personality = characterData.personality || characterData.data?.personality || '';
+        const scenario = characterData.scenario || characterData.data?.scenario || '';
+        const first_mes = characterData.first_mes || characterData.data?.first_mes || '';
+        const mes_example = characterData.mes_example || characterData.data?.mes_example || '';
+
         const values = [
             userHandle,
-            character.filename,
-            character.name,
-            character.description,
-            character.personality,
-            character.scenario,
-            character.first_mes,
-            character.mes_example,
-            character.avatar,
+            character.filename || `${name}.png`,
+            name,
+            description,
+            personality,
+            scenario,
+            first_mes,
+            mes_example,
+            character.avatar || '',
             JSON.stringify(character)
         ];
 
         try {
             await this.pool.query(query, values);
+            console.log(`角色已保存到数据库: ${name} (${character.filename})`);
             return true;
         } catch (error) {
-            console.error('Error saving character:', error);
+            console.error('保存角色失败:', error);
             return false;
         }
     }
@@ -479,13 +489,13 @@ class DatabaseManager {
     async getAllCharacters(userHandle) {
         if (!this.initialized) return [];
 
-        const query = 'SELECT filename, name, description, avatar FROM characters WHERE user_handle = $1 ORDER BY updated_at DESC';
+        const query = 'SELECT data FROM characters WHERE user_handle = $1 ORDER BY updated_at DESC';
         
         try {
             const result = await this.pool.query(query, [userHandle]);
-            return result.rows;
+            return result.rows.map(row => row.data).filter(Boolean);
         } catch (error) {
-            console.error('Error getting all characters:', error);
+            console.error('获取所有角色失败:', error);
             return [];
         }
     }
@@ -551,8 +561,11 @@ class DatabaseManager {
     /**
      * 保存聊天记录
      */
-    async saveChat(userHandle, chatId, characterName, messages) {
+    async saveChat(userHandle, characterName, fileName, messages) {
         if (!this.initialized) return false;
+
+        // 生成唯一的聊天ID，结合角色名和文件名
+        const chatId = `${characterName}_${fileName}`;
 
         const query = `
             INSERT INTO chats (user_handle, chat_id, character_name, messages)
@@ -572,9 +585,10 @@ class DatabaseManager {
 
         try {
             await this.pool.query(query, values);
+            console.log(`聊天记录已保存到数据库: ${chatId}`);
             return true;
         } catch (error) {
-            console.error('Error saving chat:', error);
+            console.error('保存聊天记录失败:', error);
             return false;
         }
     }
@@ -582,16 +596,20 @@ class DatabaseManager {
     /**
      * 获取聊天记录
      */
-    async getChat(userHandle, chatId) {
+    async getChat(userHandle, characterName, fileName) {
         if (!this.initialized) return null;
+
+        // 生成对应的聊天ID
+        const chatId = `${characterName}_${fileName}`;
 
         const query = 'SELECT messages FROM chats WHERE user_handle = $1 AND chat_id = $2';
         
         try {
             const result = await this.pool.query(query, [userHandle, chatId]);
-            return result.rows[0]?.messages || null;
+            const messages = result.rows[0]?.messages;
+            return messages ? JSON.parse(messages) : null;
         } catch (error) {
-            console.error('Error getting chat:', error);
+            console.error('获取聊天记录失败:', error);
             return null;
         }
     }

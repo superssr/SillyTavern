@@ -39,14 +39,38 @@ const basicAuthMiddleware = async function (request, response, callback) {
     if (!usePerUserAuth && username === basicAuthUserName && password === basicAuthUserPassword) {
         return callback();
     } else if (usePerUserAuth) {
-        const userHandles = await getAllUserHandles();
-        for (const userHandle of userHandles) {
-            if (username === userHandle) {
-                const user = await storage.getItem(toKey(userHandle));
-                if (user && user.enabled && (user.password && user.password === getPasswordHash(password, user.salt))) {
-                    return callback();
+        try {
+            const { userStorage } = await import('../database-integration.js');
+            const userHandles = await getAllUserHandles();
+            
+            for (const userHandle of userHandles) {
+                if (username === userHandle) {
+                    const user = await userStorage.getItem(toKey(userHandle));
+                    if (user && user.enabled !== false) {
+                        // 支持多种密码格式验证
+                        let isPasswordValid = false;
+                        
+                        if (user.password) {
+                            if (user.password.includes(':')) {
+                                // 数据库格式：salt:hash
+                                const [salt, storedHash] = user.password.split(':');
+                                const inputHash = getPasswordHash(password, salt);
+                                isPasswordValid = `${salt}:${inputHash}` === user.password;
+                            } else if (user.salt) {
+                                // 文件系统格式：password + salt
+                                const inputHash = getPasswordHash(password, user.salt);
+                                isPasswordValid = inputHash === user.password;
+                            }
+                        }
+                        
+                        if (isPasswordValid) {
+                            return callback();
+                        }
+                    }
                 }
             }
+        } catch (error) {
+            console.error('Basic auth user verification failed:', error);
         }
     }
     return unauthorizedResponse(response);

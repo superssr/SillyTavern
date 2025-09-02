@@ -256,15 +256,26 @@ function getLatestBackup(handle) {
 
 export const router = express.Router();
 
-router.post('/save', function (request, response) {
+router.post('/save', async function (request, response) {
     try {
-        const pathToSettings = path.join(request.user.directories.root, SETTINGS_FILE);
-        writeFileAtomicSync(pathToSettings, JSON.stringify(request.body, null, 4), 'utf8');
-        triggerAutoSave(request.user.profile.handle);
+        // 在纯数据库模式下，使用持久化管理器保存设置
+        if (isPureDatabaseMode) {
+            const success = await persistenceManager.saveSettings(request.user.profile.handle, request.body);
+            if (!success) {
+                throw new Error('Failed to save settings to database');
+            }
+            console.log(`设置已保存到数据库：用户 ${request.user.profile.handle}`);
+        } else {
+            // 文件系统模式
+            const pathToSettings = path.join(request.user.directories.root, SETTINGS_FILE);
+            writeFileAtomicSync(pathToSettings, JSON.stringify(request.body, null, 4), 'utf8');
+            triggerAutoSave(request.user.profile.handle);
+        }
+        
         response.send({ result: 'ok' });
     } catch (err) {
-        console.error(err);
-        response.send(err);
+        console.error('保存设置失败:', err);
+        response.status(500).send({ error: err.message });
     }
 });
 
@@ -272,21 +283,30 @@ router.post('/save', function (request, response) {
 router.post('/get', async (request, response) => {
     let settings;
     try {
-        const pathToSettings = path.join(request.user.directories.root, SETTINGS_FILE);
-        let fileSettings = {};
+        let baseSettings = {};
         
-        // 尝试从文件读取设置
-        try {
-            const settingsContent = fs.readFileSync(pathToSettings, 'utf8');
-            fileSettings = JSON.parse(settingsContent);
-        } catch (e) {
-            // 文件不存在或无效，使用空对象
+        // 根据模式获取基础设置
+        if (isPureDatabaseMode) {
+            // 从数据库获取设置
+            baseSettings = await persistenceManager.getSettings(request.user.profile.handle) || {};
+            console.log(`从数据库读取设置：用户 ${request.user.profile.handle}`);
+        } else {
+            // 从文件读取设置
+            const pathToSettings = path.join(request.user.directories.root, SETTINGS_FILE);
+            try {
+                const settingsContent = fs.readFileSync(pathToSettings, 'utf8');
+                baseSettings = JSON.parse(settingsContent);
+            } catch (e) {
+                // 文件不存在或无效，使用空对象
+                console.debug('设置文件不存在或无效，使用默认设置');
+            }
         }
         
-        // 合并文件设置和环境变量设置
-        const mergedSettings = await persistenceManager.mergeSettings(fileSettings);
+        // 合并基础设置和环境变量设置
+        const mergedSettings = await persistenceManager.mergeSettings(baseSettings);
         settings = JSON.stringify(mergedSettings, null, 4);
     } catch (e) {
+        console.error('获取设置失败:', e);
         return response.sendStatus(500);
     }
 
