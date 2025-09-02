@@ -93,23 +93,34 @@ function readPresetsFromDirectory(directoryPath, options = {}) {
         fileExtension = '.json',
     } = options;
 
-    const files = fs.readdirSync(directoryPath).sort(sortFunction).filter(x => path.parse(x).ext == fileExtension);
-    const fileContents = [];
-    const fileNames = [];
+    // 检查目录是否存在，如果不存在则返回空结果
+    if (!fs.existsSync(directoryPath)) {
+        console.warn(`目录不存在，跳过读取: ${directoryPath}`);
+        return { fileContents: [], fileNames: [] };
+    }
 
-    files.forEach(item => {
-        try {
-            const file = fs.readFileSync(path.join(directoryPath, item), 'utf8');
-            JSON.parse(file);
-            fileContents.push(file);
-            fileNames.push(removeFileExtension ? item.replace(/\.[^/.]+$/, '') : item);
-        } catch {
-            // skip
-            console.warn(`${item} is not a valid JSON`);
-        }
-    });
+    try {
+        const files = fs.readdirSync(directoryPath).sort(sortFunction).filter(x => path.parse(x).ext == fileExtension);
+        const fileContents = [];
+        const fileNames = [];
 
-    return { fileContents, fileNames };
+        files.forEach(item => {
+            try {
+                const file = fs.readFileSync(path.join(directoryPath, item), 'utf8');
+                JSON.parse(file);
+                fileContents.push(file);
+                fileNames.push(removeFileExtension ? item.replace(/\.[^/.]+$/, '') : item);
+            } catch {
+                // skip
+                console.warn(`${item} is not a valid JSON`);
+            }
+        });
+
+        return { fileContents, fileNames };
+    } catch (error) {
+        console.error(`读取目录 ${directoryPath} 时发生错误:`, error);
+        return { fileContents: [], fileNames: [] };
+    }
 }
 
 async function backupSettings() {
